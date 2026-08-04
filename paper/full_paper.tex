@@ -106,9 +106,9 @@ the transactional convention's cost as operation-range size grows, and
 that advantage collapses toward parity once realistic per-object work
 (e.g.\ page faults) dominates, exactly as the model predicts. We
 report these findings, the models that explain them, and their
-explicit scope and non-claims --- including that two of our six
-variants remain blocked from a clean 0-error result by a single,
-documented Verus tooling limitation --- positioned within a four-axis
+explicit scope and non-claims --- including that three of our six
+variants remain blocked from a clean 0-error result by two
+documented, independent Verus tooling limitations --- positioned within a four-axis
 classification of the memory-management design space that separates
 interface atomicity from abstraction layering and concurrency protocol
 as its own, independently variable axis.
@@ -213,9 +213,9 @@ RQ3 (\S\ref{sec:eval:rcu}) &
   \corten{rcu}'s independently written \vfn{wf\_push\_level} is missing
   the identical range clause \corten{rw}'s is, and is repaired by the
   identical fix, with zero regression (160 obligations, unchanged).
-  Both \corten{nontxn} and \corten{rcu-nontxn} are blocked from 0 errors
-  by the same class of residual Verus tooling limitation
-  (\S\ref{sec:eval:threats}), not by any logical gap. \\
+  \corten{nontxn}, \corten{coarse-nontxn}, and \corten{rcu-nontxn} are all
+  blocked from 0 errors by two distinct, documented residual Verus
+  tooling limitations (\S\ref{sec:eval:threats}), not by any logical gap. \\
 \addlinespace
 RQ4 (\S\ref{sec:eval:perf}) &
   Runtime impact &
@@ -285,11 +285,13 @@ RQ2/RQ3's finding can currently be checked to generalize
     makes the coordinate-by-coordinate comparison above valid rather
     than confounded. Under it, we construct and verify six variants of
     CortenMM. \corten{rw}, \corten{coarse}, and \corten{rcu} verify with
-    0 errors; \corten{nontxn} and \corten{rcu-nontxn} have their core
-    frame-preservation property fully proved but are blocked from a
-    clean 0-error result only by a documented, reproducible tooling
-    limitation (\S\ref{sec:eval:threats}), the same limitation in both
-    cases (\S\ref{sec:method:variants}, \S\ref{sec:eval}).
+    0 errors; \corten{nontxn}, \corten{coarse-nontxn}, and
+    \corten{rcu-nontxn} have their core frame-preservation property
+    fully proved but are blocked from a clean 0-error result by two
+    distinct, documented, reproducible tooling limitations
+    (\S\ref{sec:eval:threats}) --- both present in \corten{coarse-nontxn}
+    simultaneously, which is how we confirmed they are two issues and
+    not one (\S\ref{sec:method:variants}, \S\ref{sec:eval}).
   \item An exact, mechanistic characterization of the proof obligation
     that a transactional interface lets remain implicit --- a
     frame-preservation property over the cursor's ancestor range --- and
@@ -313,8 +315,11 @@ RQ2/RQ3's finding can currently be checked to generalize
     surfaced in the course of this work (a cross-tree build-path
     pollution bug in the artifact's Nix/Cargo tooling, a guest-runtime
     startup fault affecting any non-\vfn{pthread}-linked static
-    binary, a manifest-generation inconsistency across builds of the
-    same OS-development-kit tool, and a corrected --- initially
+    binary, an intermittent kernel-build failure root-caused to a
+    registry-mirror-shadowing conflict between a workspace-local and a
+    registry-published copy of the same crate --- with a permanent fix
+    now applied automatically by this artifact's build scripts --- and
+    a corrected --- initially
     misdiagnosed --- account of an \vfn{mprotect}-related failure later
     traced to the \vfn{pthread} issue above), reported for the
     artifact's maintainers independently of this paper's main claims.
@@ -914,6 +919,13 @@ all of the proof-cost increase seen under fine-grained locking.}
 \end{tabular}
 \end{table}
 
+The obligation counts above are exact; error counts differ from them
+and are reported separately (Table~\ref{tab:gap4-proof} for
+\corten{nontxn}; \S\ref{sec:eval:tooling} for \corten{coarse-nontxn},
+whose 3 residual errors are of the same two tooling-limitation classes
+discussed there, confirming they are not specific to fine-grained
+locking either).
+
 Figure~\ref{fig:matrix} visualizes the same data as a grouped bar chart.
 Under coarse locking, \texttt{guard\_level} is pinned to the tree root,
 so the range $[\mathit{guard\_level}, \mathit{NR\_LEVELS}]$ that the
@@ -1011,7 +1023,7 @@ Missing range & $[\mathit{guard\_level}, \mathit{NR\_LEVELS}]$ & $[\mathit{guard
 Fix & widen \texttt{forall} range & widen \texttt{forall} range \\
 Regression after fix & none & none \\
 Additional protocol-specific obligation & --- & \texttt{is\_root} preservation for \texttt{SubTreeForgotGuard} \\
-Residual blocker & \texttt{InstanceId} equality (tooling) & \texttt{InstanceId} equality (tooling), same class \\
+Residual blockers (tooling) & \texttt{InstanceId} equality (all 3 wrapper fns); \texttt{g\_level==level} nondeterminism (\vfn{unmap\_locked}) & \texttt{InstanceId} equality (all 3 wrapper fns); \vfn{g\_level==level} issue not separately isolated from the 3 reported errors \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -1166,22 +1178,43 @@ published Verus artifacts, rather than as evidence against
 generalization; a systematic survey is left to future work.
 
 \label{sec:eval:tooling}
-\paragraph{Residual Verus tooling limitation.} Both \corten{nontxn} and
-\corten{rcu-nontxn} are blocked from a clean $0$-error verification by a
-single, structurally identical residual issue: a manually re-derived
-fact of the form \texttt{res.inst\_id() =\textasciitilde{}=
-m.inst\_id()} fails to verify even though the same fact, checked via a
-standalone \texttt{assert} immediately beforehand, succeeds; Verus's
-own diagnostic further reports that the \emph{unwrapped} field
-comparison (\texttt{res.inst\_id().0 =\textasciitilde{}=
-m.inst\_id().0}) would succeed. We applied the two standard remedies
-suggested by Verus's own troubleshooting guide
-(\texttt{\#[verifier::rlimit(n)]} and
-\texttt{\#[verifier::spinoff\_prover]}); neither resolves it. We report
-this as an open, reproducible tooling limitation rather than a gap in
-the ablation's logical content, since the corresponding frame-preservation
-property --- the actual subject of RQ2/RQ3 --- is fully proved in every
-case.
+\paragraph{Residual Verus tooling limitations.} \corten{nontxn},
+\corten{coarse-nontxn}, and \corten{rcu-nontxn} are blocked from a
+clean $0$-error verification result by \emph{two} distinct residual
+issues, not one. (An earlier draft of this paper described both as
+``the same tooling limitation''; direct reproduction of
+\corten{coarse-nontxn}, reported below, showed both present
+simultaneously in a single variant, which is what exposed the
+oversimplification.) The first: a manually re-derived fact of the form
+\texttt{res.inst\_id() =\textasciitilde{}= m.inst\_id()} fails to
+verify even though the same fact, checked via a standalone
+\texttt{assert} immediately beforehand, succeeds; Verus's own
+diagnostic further reports that the \emph{unwrapped} field comparison
+(\texttt{res.inst\_id().0 =\textasciitilde{}= m.inst\_id().0}) would
+succeed. The second, independent issue: a precondition of the form
+\texttt{cursor.g\_level == cursor.level} fails to verify at an
+\vfn{unlock\_range} call site under the same pattern --- a standalone
+\texttt{assert} of the identical fact immediately beforehand succeeds,
+but the precondition checker does not accept it at the call itself.
+We applied the two standard remedies suggested by Verus's own
+troubleshooting guide (\texttt{\#[verifier::rlimit(n)]} and
+\texttt{\#[verifier::spinoff\_prover]}) to both issues; neither
+resolves either one. Reproducing \corten{coarse-nontxn} directly
+(\vfn{cargo xtask verify --targets lock-protocol-coarse-nontxn})
+confirms 142 verified obligations, matching \corten{coarse} exactly
+as Corollary~\ref{cor:coarse-nontxn} predicts, with 3 residual
+errors: the first issue at all three wrapper functions
+(\vfn{query\_locked}, \vfn{map\_locked}, \vfn{unmap\_locked}), and the
+second at \vfn{map\_locked}'s own \vfn{unlock\_range} call --- a
+different call site than where the second issue was originally
+observed for \corten{nontxn} (\vfn{unmap\_locked}), consistent with a
+nondeterminism diagnosis rather than an issue tied to one specific
+operation's proof structure. We report both as open, reproducible
+tooling limitations rather than gaps in the ablation's logical
+content, since the corresponding frame-preservation property --- the
+actual subject of RQ2/RQ3 --- is fully proved in every case; the full
+diagnostic transcript for \corten{coarse-nontxn} is included in this
+paper's artifact (Appendix~\ref{sec:artifact}).
 
 \paragraph{Micro-benchmark scope.} Our runtime evaluation
 (\S\ref{sec:eval:perf}) covers three workload shapes on a single guest
@@ -1478,12 +1511,12 @@ do \emph{not} claim to explain, so as not to overreach beyond
     depicts a binary distinction, not a continuum we have data for. A
     protocol locking, say, every other level is not covered by
     Claim~\ref{claim:threshold} as stated.
-  \item \textbf{No claim about the residual tooling issue.} The
-    \vfn{InstanceId}-equality failure reported in
-    \S\ref{sec:eval:threats} is, by our own diagnosis there, a property
+  \item \textbf{No claim about the residual tooling issues.} The two
+    residual failures reported in
+    \S\ref{sec:eval:threats} are, by our own diagnosis there, properties
     of Verus's SMT-facing trigger/fact-propagation machinery, not of
     the logical proof obligation our model concerns; neither model in
-    this section makes any prediction about it, and none should be
+    this section makes any prediction about either, and none should be
     inferred.
   \item \textbf{No claim of numerical calibration.} Every reference to
     the runtime model's parameters ($C_{\mathrm{lock}}$,
@@ -1845,8 +1878,8 @@ small number of systems we could check, is a question this paper
 raises but leaves open. We see three concrete directions building on
 this work: applying verification-preserving ablation to a system built
 independently of CortenMM, once one instantiating the interface-atomicity
-axis is available; resolving the residual \vfn{InstanceId}-equality
-tooling limitation that keeps two of our six variants from a clean
+axis is available; resolving the two residual tooling
+limitations that keep three of our six variants from a clean
 0-error result, which \S\ref{sec:eval:threats} diagnoses precisely
 enough to be independently reproducible; and extending the runtime
 model of \S\ref{sec:theory:runtime} to multi-core contention, which the
@@ -2074,15 +2107,36 @@ from its own batched/per-page cycle counts) before being included here.
 \subsection{Known limitations of the artifact}
 
 Consistent with \S\ref{sec:eval:threats}, this artifact does not claim
-0 verification errors for \corten{nontxn} or \corten{rcu-nontxn}; it
-documents exactly the 2- and 3-error residual states \S\ref{sec:eval}
-reports, with the specific failing precondition clause identified in
-\vfn{docs/verus-tooling-issue.md}. That document also records a finer
-distinction not stated elsewhere in the paper: \corten{nontxn}'s
-\vfn{query\_locked} reaches a clean 0-error result, while
-\corten{rcu-nontxn}'s does not (all three of its wrapper functions hit
-the residual issue, not only \vfn{map\_locked}/\vfn{unmap\_locked}).
-This artifact does not include a build of an
+0 verification errors for \corten{nontxn}, \corten{coarse-nontxn}, or
+\corten{rcu-nontxn}; it documents exactly the 2-, 3-, and 3-error
+residual states \S\ref{sec:eval} reports for these three variants
+respectively, each involving two distinct tooling-limitation classes
+(\S\ref{sec:eval:tooling}), with the specific failing clauses
+identified in \vfn{docs/verus-tooling-issue.md} and, for
+\corten{coarse-nontxn}, a complete raw diagnostic transcript in
+\vfn{docs/verification\_log\_coarse\_nontxn.txt}. That documentation
+also records a finer distinction not stated elsewhere in the paper:
+\corten{nontxn}'s \vfn{query\_locked} reaches a clean 0-error result,
+while neither \corten{coarse-nontxn}'s nor \corten{rcu-nontxn}'s does
+(all three of each variant's wrapper functions hit at least one of the
+two residual issues). \emph{Post-submission reproduction note:} both
+the proof-cost reproduction path
+(\vfn{scripts/verify\_all\_variants.sh}) and the runtime-benchmark
+path (\vfn{scripts/run\_benchmarks.sh}) have since been independently
+confirmed to reproduce end-to-end. The proof-cost path reproduces exit
+code 0 and all six variants' exact obligation/error counts as reported
+above. The runtime-benchmark path initially encountered an
+intermittent kernel-image build failure, root-caused to a
+registry-mirror-shadowing conflict for
+\vfn{osdk-frame-allocator}/\vfn{osdk-heap-allocator}/\vfn{ostd}
+(full diagnosis in \vfn{docs/environment-setup-and-findings.md}, issue
+4) rather than the originally-suspected \vfn{cargo-osdk}
+build-provenance issue; a permanent fix (patching these three crates
+to their local workspace paths) is now applied automatically by
+\vfn{scripts/run\_benchmarks.sh}, after which all three benchmark
+programs reproduced overhead ratios consistent with
+\vfn{benchmarks/raw\_data\_*.csv} within the paper's documented
+run-to-run noise band. This artifact does not include a build of an
 external, independently maintained Verus artifact instantiating both
 sides of the interface-atomicity axis, since --- per
 \S\ref{sec:eval:threats} --- we did not find one; a reviewer wishing to

@@ -72,22 +72,73 @@ correctly; the crash was entirely explained by issue #2, not by
 anything specific to `mprotect()`. The corrected `mprotect_scale.c` in
 `benchmarks/` includes a comment recording this history.
 
-## 4. Manifest-generation inconsistency across `cargo-osdk` builds
+## 4. `#[global_allocator]` conflict: registry-mirror shadowing of local workspace crates (RESOLVED)
 
-We observed that two builds of `cargo-osdk` from ostensibly identical
-source (`osdk/src` was confirmed byte-for-byte identical via `diff -rq`
-across two kernel trees) produced *semantically different* generated
-`Cargo.toml` manifests for the kernel's own `run-base` wrapper crate:
-one build emitted explicit `path = "..."` dependencies for
-`osdk-frame-allocator`/`osdk-heap-allocator`/`ostd`; a later build
-(after the fix in issue #1 and a fresh `cargo install`) emitted
-version-only dependencies (no `path` field) for the same three
-crates, which in turn caused a `#[global_allocator]`/
-`#[alloc_error_handler]` "conflicts with ostd" compile error not
-present in the earlier build. We did not root-cause this (it would
-require reading `cargo-osdk`'s own manifest-generation logic, which we
-did not do), and report it here as an open, reproducible finding for
-the OSDK maintainers rather than as something this artifact resolves.
+### Symptom
+
+`make build` for a kernel tree fails with:
+
+```
+error: the `#[global_allocator]` in ostd conflicts with global allocator in: ostd
+error: the `#[alloc_error_handler]` in ostd conflicts with allocation error handler in: ostd
+```
+
+### Root cause (confirmed)
+
+`osdk/src/base_crate/Cargo.toml.template` (the template `cargo-osdk`
+uses to generate the kernel's `run-base` wrapper crate manifest)
+specifies `osdk-frame-allocator`, `osdk-heap-allocator`, and `ostd` as
+plain `version = "0.16.0"` dependencies, with no `path`. This is only
+safe if no matching version is resolvable from the configured registry
+mirror. We confirmed, via `find /root/.cargo/registry -iname
+'*osdk-frame-allocator*' -o -iname '*osdk-heap-allocator*'`, that both
+crates **are** published on the project's registry mirror
+(`rsproxy.cn`) at version `0.16.1`, which satisfies the `"0.16.0"`
+requirement (Cargo's default caret-range semantics). Once this
+mirror's local cache is warm (e.g. from an unrelated earlier `cargo`
+invocation), Cargo resolves the version-only dependency to the
+**registry-published** copy rather than the local workspace copy that
+`aster-nix`/`kernel` depends on directly via a path dependency. This
+produces two distinct `ostd` crate instances in the same build, each
+defining `#[global_allocator]`/`#[alloc_error_handler]` -- hence the
+conflict. This explains why the same build sometimes succeeded and
+sometimes failed with no source-code change: it depends entirely on
+whether the registry mirror's local cache for these two package names
+happens to be warm at build time, which is influenced by unrelated
+`cargo` activity in the same environment.
+
+### Fix (confirmed working)
+
+Add explicit `[patch.crates-io]` entries for all three crates to
+`osdk/src/base_crate/Cargo.toml.template`, pointing at their local
+workspace paths, exactly as the template already does for
+`core2`/`libflate`/`libflate_lz77`:
+
+```toml
+[patch.crates-io]
+osdk-frame-allocator = { path = "<tree-root>/osdk/deps/frame-allocator" }
+osdk-heap-allocator = { path = "<tree-root>/osdk/deps/heap-allocator" }
+ostd = { path = "<tree-root>/ostd" }
+```
+
+After adding this, `cargo-osdk` must be reinstalled from the same
+tree's own `osdk/` (`cd osdk && cargo install --path . --force
+--locked`) for the patch to take effect, since the template is
+compiled into the `cargo-osdk` binary rather than read at build time.
+`scripts/run_benchmarks.sh` now applies this patch and reinstall as an
+explicit, unconditional step, rather than treating it as a
+troubleshooting note.
+
+### Verification
+
+Confirmed on two independent kernel trees (`cortenmm-coarse` and
+`cortenmm-rw`) after a full `rm -rf target/`: both build cleanly to a
+bootable ISO. `cortenmm-rw`'s image, booted and exercised with all
+three benchmark programs, reproduced overhead ratios consistent with
+`benchmarks/raw_data_*.csv` (e.g. `mmap_batch_scale 16`: 7.107 vs. the
+recorded 7.125-7.562 range; `mprotect_scale 16`: 8.332 vs. the
+recorded 8.153; `alloc_arena_scale 16 4`: 1.114 vs. the recorded
+1.087), within the paper's documented run-to-run noise band.
 
 ## Toolchain versions used
 

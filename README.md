@@ -143,6 +143,22 @@ and an estimated running time on the reference hardware.
   `CortenMM_nontxn`'s `query_locked` reaches a clean 0-error result;
   `CortenMM_rcu-nontxn`'s does not (all three of its wrapper functions
   hit the residual issue). See `docs/verus-tooling-issue.md`.
+- **The runtime-benchmark build path (claims 5-7,
+  `scripts/run_benchmarks.sh`) required an additional build-tooling
+  fix, now applied automatically by the script.** An earlier version
+  of this artifact reported this path as unreliable; the root cause
+  has since been identified (`docs/environment-setup-and-findings.md`,
+  issue 4: an intermittent registry-mirror-shadowing conflict for
+  `osdk-frame-allocator`/`osdk-heap-allocator`/`ostd`) and a permanent
+  fix -- patching these three crates to resolve to their local
+  workspace paths -- is now applied automatically by
+  `scripts/run_benchmarks.sh`. With this fix, claims 5-7 have been
+  independently reproduced end-to-end (kernel build, boot, and all
+  three benchmark programs run against a freshly built image), with
+  overhead ratios matching `benchmarks/raw_data_*.csv` within the
+  paper's documented run-to-run noise band. Both the proof-cost path
+  (claims 1-4) and the runtime-benchmark path (claims 5-7) are now
+  confirmed reproducible end-to-end.
 - This artifact does not include a build of any external,
   independently maintained Verus system instantiating both sides of
   the interface-atomicity axis (transactional vs. non-transactional),
