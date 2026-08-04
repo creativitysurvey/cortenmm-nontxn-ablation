@@ -40,7 +40,7 @@ This step only confirms the environment is set up correctly and one
 representative crate verifies; it is not a full reproduction.
 
 ```bash
-git clone https://github.com/creativitysurvey/cortenmm-nontxn-ablation.git artifact-repo
+git clone <this-repository-url> artifact-repo
 cd artifact-repo
 
 docker pull ghcr.io/telos-syslab/cortenmm-artifact-env:v4.1
@@ -49,14 +49,20 @@ docker run -dit --name cortenmm-ae \
   ghcr.io/telos-syslab/cortenmm-artifact-env:v4.1
 
 docker exec cortenmm-ae bash -c \
-  "cd /root/artifact/crates/lock-protocol-coarse-nontxn && \
-   cargo xtask verify --targets lock-protocol-coarse-nontxn 2>&1 | tail -5"
+  "cd /root/artifact/crates/lock-protocol-coarse && \
+   cargo xtask verify --targets lock-protocol-coarse 2>&1 | tail -5"
 ```
 
 **Expected output** (last line):
 ```
 verification results:: 142 verified, 0 errors
 ```
+
+(This smoke test uses `lock-protocol-coarse`, not
+`lock-protocol-coarse-nontxn`, specifically because the latter has
+known residual errors -- see the corrected Section 4, claim 2, and
+`docs/verus-tooling-issue.md` -- and is not a suitable first
+correctness check.)
 
 If you see this line, the environment is correctly set up and you can
 proceed to Section 4. If the crate paths above don't match this
@@ -104,28 +110,35 @@ and an estimated running time on the reference hardware.
 | # | Claim (paper location) | Command | Expected output | Est. time |
 |---|---|---|---|---|
 | 1 | `CortenMM_rw` verifies at 149 obligations, 0 errors (Table "Proof cost, CortenMM_rw vs. CortenMM_coarse") | `docker exec cortenmm-ae bash -c "cd /root/artifact/crates/lock-protocol-rw && cargo xtask verify --targets lock-protocol-rw 2>&1 \| tail -3"` | `verification results:: 149 verified, 0 errors` | ~2 min |
-| 2 | `CortenMM_coarse` verifies at 142 obligations, 0 errors; the 2x2 matrix's coarse row is identical for both interface styles | `bash scripts/verify_all_variants.sh` (runs all six; grep for `lock-protocol-coarse` and `lock-protocol-coarse-nontxn` in the output) | Both print `142 verified, 0 errors` | ~10 min (all six) |
+| 2 | `CortenMM_coarse` and `CortenMM_coarse-nontxn` verify at the SAME obligation count, 142 (the 2x2 matrix's coarse row is identical for both interface styles); `CortenMM_coarse` reaches 0 errors, `CortenMM_coarse-nontxn` has 3 residual errors of the same two tooling-limitation classes documented for `CortenMM_nontxn`/`CortenMM_rcu-nontxn` (see `docs/verus-tooling-issue.md`) | `bash scripts/verify_all_variants.sh` (runs all six; grep for `lock-protocol-coarse` and `lock-protocol-coarse-nontxn` in the output) | `lock-protocol-coarse`: `142 verified, 0 errors`. `lock-protocol-coarse-nontxn`: `142 verified, 3 errors`; full diagnostic in `docs/verification_log_coarse_nontxn.txt` | ~10 min (all six) |
 | 3 | `CortenMM_nontxn` verifies at 150 obligations, 2 errors, all residual (Table "Proof cost, ...vs. CortenMM_nontxn") | included in `scripts/verify_all_variants.sh` output | `150 verified, 2 errors`; compare failing clauses against `docs/verus-tooling-issue.md` | (included above) |
 | 4 | `CortenMM_rcu-nontxn` verifies at 160 obligations, 3 errors, zero regression from `CortenMM_rcu`'s own 160 (Table "Proof cost, CortenMM_rcu vs. ...") | included in `scripts/verify_all_variants.sh` output | `160 verified, 0 errors` for `lock-protocol-rcu`; `160 verified, 3 errors` for `lock-protocol-rcu-nontxn` | (included above) |
 | 5 | `mmap` non-transactional overhead grows from ~0.72x (N=1) to ~13.6x (N=64) (Figure "mmap: batched vs. per-page") | `bash scripts/run_benchmarks.sh`, then at the guest shell: `/test/scale/mmap_batch_scale 1` ... `/test/scale/mmap_batch_scale 64` | `PER_PAGE_OVERHEAD_RATIO` printed by each run; compare against `benchmarks/raw_data_mmap.csv` | ~15 min (kernel build) + ~2 min (runs) |
 | 6 | `mprotect` non-transactional overhead reaches up to ~40x at N=64 (Figure "mprotect: batched vs. per-page") | same kernel image as claim 5; at guest shell: `/test/scale/mprotect_scale 4` ... `/test/scale/mprotect_scale 64` | Compare against `benchmarks/raw_data_mprotect.csv` | ~2 min (same image) |
 | 7 | Allocator-arena overhead collapses to ~1x once first-touch page faults are included (Table "Allocator-arena workload") | same kernel image; `/test/scale/alloc_arena_scale 4 4`, `16 4`, `64 4`, `64 16` | Compare against `benchmarks/raw_data_alloc_arena.csv` | ~2 min (same image) |
-| 8 | `CortenMM_coarse-nontxn` requires zero new proof code vs. `CortenMM_nontxn` (Corollary 1) | `diff crates/lock-protocol-nontxn/src/mm/page_table/cursor/mod.rs crates/lock-protocol-coarse-nontxn/src/mm/page_table/cursor/mod.rs` | Empty diff | < 1 min |
+| 8 | `CortenMM_coarse-nontxn` requires zero new proof code in `mod.rs` vs. `CortenMM_nontxn` (Corollary 1) -- this claim is specifically about the `mod.rs` diff, not about the overall verification outcome; the 3 residual errors reported in claim 2 arise from `locking.rs` (`CortenMM_coarse`'s own file, not transplanted) interacting with the transplanted `mod.rs`, not from any new edit to `mod.rs` itself | `diff crates/lock-protocol-nontxn/src/mm/page_table/cursor/mod.rs crates/lock-protocol-coarse-nontxn/src/mm/page_table/cursor/mod.rs` | Empty diff | < 1 min |
 | 9 | The `wf_push_level` gap and fix are structurally identical between `CortenMM_rw` and `CortenMM_rcu` (Table "Structural correspondence") | `diff patches/rw-to-nontxn/wf_push_level_fix.md patches/rcu-to-rcu-nontxn/rcu_specific_fixes.md` (read both; the added `forall` clause is line-for-line identical) | Manual inspection | ~5 min |
 
 ---
 
 ## 5. Known Limitations
 
-- **Claims 3 and 4 do not reach 0 errors.** This is a documented,
-  reproducible Verus tooling limitation (`InstanceId`-equality
-  propagation across a function-call boundary), not a gap this
-  artifact hides. Full diagnosis, including the exact failing clause
-  and the two remedies attempted (`#[verifier::rlimit]`,
-  `#[verifier::spinoff_prover]`), is in
-  `docs/verus-tooling-issue.md`. The core property each claim is
-  actually about -- frame preservation -- **is** fully proved in every
-  case; only this one auxiliary `InstanceId` clause is affected.
+- **Claims 2 (coarse-nontxn), 3, and 4 do not reach 0 errors.** This
+  is now confirmed to involve **two distinct** documented,
+  reproducible Verus tooling limitations, not one: (A) an
+  `InstanceId`-equality propagation failure, and (B) a `g_level ==
+  level` precondition nondeterminism. Both are described in full,
+  with a real, complete diagnostic log for `CortenMM_coarse-nontxn`,
+  in `docs/verus-tooling-issue.md`. An earlier version of this
+  artifact's documentation (and the paper's own earlier prose)
+  described these as "the same issue" in every variant; direct
+  reproduction against `CortenMM_coarse-nontxn` showed both issues
+  present simultaneously, which is why they are now documented
+  separately. The core property each claim is actually about --
+  frame preservation, the actual subject of this paper's Research
+  Questions 2 and 3 -- **is** fully proved in every case; both issues
+  concern only auxiliary bookkeeping facts that Verus fails to
+  propagate across a call boundary.
 - One asymmetry not stated elsewhere in the paper:
   `CortenMM_nontxn`'s `query_locked` reaches a clean 0-error result;
   `CortenMM_rcu-nontxn`'s does not (all three of its wrapper functions

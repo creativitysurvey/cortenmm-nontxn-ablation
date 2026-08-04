@@ -1,7 +1,7 @@
 variant,axis_vs_rw,B_locking,C_interface,verified_obligations,errors,notes
 CortenMM_rw,baseline,fine-rw,transactional,149,0,baseline; published by CortenMM (SOSP'25)
 CortenMM_coarse,B only,coarse,transactional,142,0,Gap1
-CortenMM_nontxn,C only,fine-rw,non-transactional,150,2,core frame-preservation property fully proved; residual InstanceId-equality tooling issue (see docs/verus-tooling-issue.md)
-CortenMM_coarse-nontxn,B and C,coarse,non-transactional,142,unreported,transplanted verbatim from CortenMM_nontxn's mod.rs onto CortenMM_coarse's locking.rs; zero new proof code
+CortenMM_nontxn,C only,fine-rw,non-transactional,150,2,core frame-preservation property fully proved; residual issues: InstanceId-equality (all 3 wrapper fns) + g_level==level nondeterminism (unmap_locked); see docs/verus-tooling-issue.md
+CortenMM_coarse-nontxn,B and C,coarse,non-transactional,142,3,confirmed by direct reproduction (docs/verification_log_coarse_nontxn.txt); mod.rs transplanted verbatim from CortenMM_nontxn onto CortenMM_coarse's locking.rs (zero new proof code in mod.rs); residual errors: InstanceId-equality (all 3 wrapper fns) + g_level==level nondeterminism (map_locked)
 CortenMM_rcu,baseline (2nd),RCU,transactional,160,0,baseline; published by CortenMM (SOSP'25)
-CortenMM_rcu-nontxn,C only (vs rcu),RCU,non-transactional,160,3,core frame-preservation and is_root properties fully proved; same class of residual tooling issue as CortenMM_nontxn
+CortenMM_rcu-nontxn,C only (vs rcu),RCU,non-transactional,160,3,core frame-preservation and is_root properties fully proved; InstanceId-equality issue confirmed (all 3 wrapper fns); whether one of the 3 is instead the g_level nondeterminism issue was not separately checked

@@ -1,0 +1,73 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `xtask/target/debug/xtask verify --targets lock-protocol-coarse-nontxn`
+Verifying target: lock-protocol-coarse-nontxn
+error: postcondition not satisfied
+  --> lock-protocol-coarse-nontxn/src/nontxn_api.rs:32:9
+   |
+32 |         res.1@.inst_id() =~= pt.inst@.id(),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ failed this postcondition
+...
+39 |     (result, m2)
+   |     ------------ at the end of the function body
+note: diagnostics via expansion
+  --> lock-protocol-coarse-nontxn/src/nontxn_api.rs:32:9
+   |
+32 |         res.1@.inst_id() =~= pt.inst@.id(),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note:
+res.1.inv() ✔
+res.1.inst_id() =~= pt.inst.id() ✘
+|   res.1.inst_id().0 =~= pt.inst.id().0
++---
+res.1.state() is Void ✔
+error: postcondition not satisfied
+  --> lock-protocol-coarse-nontxn/src/nontxn_api.rs:59:9
+   |
+59 |         res.1@.inst_id() =~= pt.inst@.id(),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ failed this postcondition
+...
+68 |     (result, m2)
+   |     ------------ at the end of the function body
+error: precondition not satisfied
+   --> lock-protocol-coarse-nontxn/src/nontxn_api.rs:67:14
+    |
+67  |     let m2 = locking::unlock_range(&mut cursor_back, Tracked(model));
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+   ::: lock-protocol-coarse-nontxn/src/mm/page_table/cursor/locking.rs:148:9
+    |
+148 |         old(cursor).g_level@ == old(cursor).level,
+    |         ----------------------------------------- failed precondition
+note: diagnostics via expansion
+   --> lock-protocol-coarse-nontxn/src/mm/page_table/cursor/locking.rs:148:9
+    |
+148 |         old(cursor).g_level@ == old(cursor).level,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note:
+cursor_back.wf() ✔
+cursor_back.g_level == cursor_back.level ✘
+cursor_back.wf_with_lock_protocol_model(model) ✔
+model.inv() ✔
+model.state() is WriteLocked ✔
+error: postcondition not satisfied
+  --> lock-protocol-coarse-nontxn/src/nontxn_api.rs:88:9
+   |
+88 |         res.1@.inst_id() =~= pt.inst@.id(),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ failed this postcondition
+...
+97 |     (result, m2)
+   |     ------------ at the end of the function body
+note: diagnostics via expansion
+  --> lock-protocol-coarse-nontxn/src/nontxn_api.rs:88:9
+   |
+88 |         res.1@.inst_id() =~= pt.inst@.id(),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note:
+res.1.inv() ✔
+res.1.inst_id() =~= pt.inst.id() ✘
+|   res.1.inst_id().0 =~= pt.inst.id().0
++---
+res.1.state() is Void ✔
+verification results:: 142 verified, 3 errors
+error: aborting due to 4 previous errors
+Error: Target lock-protocol-coarse-nontxn failed with status exit status: 1
