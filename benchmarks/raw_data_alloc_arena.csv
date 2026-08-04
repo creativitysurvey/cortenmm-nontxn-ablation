@@ -1,0 +1,5 @@
+workload,n_allocs,pages_per_alloc,arena_cycles,direct_cycles,overhead_ratio
+alloc_arena,4,4,12116,11500,0.949
+alloc_arena,16,4,53770,58434,1.087
+alloc_arena,64,4,216412,230970,1.067
+alloc_arena,64,16,244922,250152,1.021

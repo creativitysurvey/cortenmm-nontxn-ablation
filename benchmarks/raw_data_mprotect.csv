@@ -1,0 +1,6 @@
+workload,n_pages,run,batched_cycles,per_page_cycles,overhead_ratio
+mprotect,4,1,8244,28312,3.434
+mprotect,16,1,8436,68780,8.153
+mprotect,32,1,12106,137108,11.326
+mprotect,64,1,8046,321938,40.012
+mprotect,64,2,7994,274724,34.366
