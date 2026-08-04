@@ -40,7 +40,7 @@ This step only confirms the environment is set up correctly and one
 representative crate verifies; it is not a full reproduction.
 
 ```bash
-git clone <this-repository-url> artifact-repo
+git clone https://github.com/creativitysurvey/cortenmm-nontxn-ablation.git artifact-repo
 cd artifact-repo
 
 docker pull ghcr.io/telos-syslab/cortenmm-artifact-env:v4.1
