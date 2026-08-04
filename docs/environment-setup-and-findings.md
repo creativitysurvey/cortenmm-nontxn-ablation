@@ -97,3 +97,49 @@ the OSDK maintainers rather than as something this artifact resolves.
   artifact image (`ghcr.io/telos-syslab/cortenmm-artifact-env:v4.1`)
 - SMT solver: Z3, default `rlimit`
 - Guest: QEMU/KVM, 1 vCPU, 8 GiB RAM, `release-lto` build profile
+
+## Reconstructing the crates from patches
+
+If your checkout of this repository does not include populated
+`crates/*` directories, reconstruct them as follows. This is the exact
+sequence originally used to produce every result reported in the
+paper.
+
+```bash
+# 1. Obtain the CortenMM SOSP'25 artifact image and start a container
+docker pull ghcr.io/telos-syslab/cortenmm-artifact-env:v4.1
+docker run -dit --name cortenmm-ae \
+  ghcr.io/telos-syslab/cortenmm-artifact-env:v4.1
+
+# 2. lock-protocol-rw and lock-protocol-rcu are CortenMM's own
+#    published baselines; they ship inside the artifact image
+#    unmodified at /root/asterinas/verification/.
+
+# 3. CortenMM_coarse: apply the Gap-1 locking-granularity change
+#    (simplify locking.rs / va_range.rs to a single whole-tree lock;
+#    mod.rs is left byte-for-byte identical to lock-protocol-rw's).
+
+# 4. CortenMM_nontxn: copy lock-protocol-rw, then apply
+#    patches/rw-to-nontxn/wf_push_level_fix.md's diff to mod.rs and
+#    locking.rs, and add patches/rw-to-nontxn/nontxn_api.rs as a new
+#    file.
+
+# 5. CortenMM_coarse-nontxn: copy lock-protocol-coarse, then
+#    transplant lock-protocol-nontxn's mod.rs onto it verbatim (no
+#    further edit -- this zero-edit transplant, and its resulting
+#    142-obligation, 0-new-proof-code outcome, is itself one of the
+#    paper's checkable claims, see README.md Section 4, claim 8).
+
+# 6. CortenMM_rcu-nontxn: copy lock-protocol-rcu, then apply
+#    patches/rw-to-nontxn/wf_push_level_fix.md's fix (same clause,
+#    applied to RCU's own wf_push_level) plus the two RCU-specific
+#    patches in patches/rcu-to-rcu-nontxn/rcu_specific_fixes.md, and
+#    add an RCU-specific nontxn_api.rs (structurally analogous to
+#    patches/rw-to-nontxn/nontxn_api.rs, but routing through
+#    locking::lock_range's 3-tuple return and threading
+#    SubTreeForgotGuard through every call).
+
+# 7. Verify each crate independently:
+bash scripts/verify_all_variants.sh
+```
+
