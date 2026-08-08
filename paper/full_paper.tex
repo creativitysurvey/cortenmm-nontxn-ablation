@@ -54,7 +54,7 @@
 \newcommand{\corten}[1]{\textsc{CortenMM\_#1}}
 \newcommand{\vfn}[1]{\texttt{#1}}
 
-\title{\bf Gated by Locking Structure, Not Fixed:
+\title{\bf The Locking-Gated Threshold (LGT) Effect:
 The Proof Cost of a Transactional Interface Across Three
 Verified Concurrency Protocols in CortenMM}
 
@@ -96,7 +96,8 @@ an obligation count numerically identical to its transactional
 counterpart (142 in both cases); and under RCU, an independently
 implemented protocol exhibits the identical gap, repaired by the
 identical fix, with zero regression in its own baseline's obligation
-count (160). We formalize this as a threshold effect --- the cost is
+count (160). We formalize this as the \emph{Locking-Gated Threshold
+(LGT) effect} --- the cost is
 gated by whether the locking protocol's ancestor range is degenerate
 or structural, not a property of the interface change itself --- and
 develop an amortized-fixed-cost model that a runtime evaluation
@@ -116,7 +117,8 @@ as its own, independently variable axis.
 
 \noindent\textbf{Keywords:} formal verification, proof engineering,
 Rust, Verus, memory management, page tables, concurrency protocols,
-transactional interfaces, ablation study, proof cost.
+transactional interfaces, ablation study, proof cost, Locking-Gated
+Threshold (LGT) effect.
 
 
 
@@ -204,8 +206,9 @@ RQ2 (\S\ref{sec:eval:gap4}) &
   149 to 150 --- but only under fine-grained locking. The missing
   fourth cell, \corten{coarse-nontxn}, requires \emph{zero} new proof
   code and verifies at exactly 142, identical to \corten{coarse}: the
-  cost is a threshold effect of the locking protocol's structure
-  (\S\ref{sec:theory:proof}), not a fixed cost of removing the
+  cost is a threshold effect of the locking protocol's structure ---
+  the Locking-Gated Threshold (LGT) effect,
+  \S\ref{sec:theory:proof} --- not a fixed cost of removing the
   interface. \\
 \addlinespace
 RQ3 (\S\ref{sec:eval:rcu}) &
@@ -315,11 +318,8 @@ RQ2/RQ3's finding can currently be checked to generalize
     surfaced in the course of this work (a cross-tree build-path
     pollution bug in the artifact's Nix/Cargo tooling, a guest-runtime
     startup fault affecting any non-\vfn{pthread}-linked static
-    binary, an intermittent kernel-build failure root-caused to a
-    registry-mirror-shadowing conflict between a workspace-local and a
-    registry-published copy of the same crate --- with a permanent fix
-    now applied automatically by this artifact's build scripts --- and
-    a corrected --- initially
+    binary, a manifest-generation inconsistency across builds of the
+    same OS-development-kit tool, and a corrected --- initially
     misdiagnosed --- account of an \vfn{mprotect}-related failure later
     traced to the \vfn{pthread} issue above), reported for the
     artifact's maintainers independently of this paper's main claims.
@@ -1280,7 +1280,7 @@ the queried virtual-address range and can be any level $1,\ldots,
 identically, for every operation, on every call.
 \end{observation}
 
-\begin{claim}[Threshold effect]
+\begin{claim}[Locking-Gated Threshold (LGT) effect]
 \label{claim:threshold}
 Under a degenerate protocol, the ancestor-preservation obligation
 (\S\ref{sec:method:repair}) is discharged by \vfn{wf()} itself, with no
@@ -1297,6 +1297,11 @@ non-degenerate range requires an explicit \(\mathtt{forall}\) clause
 pattern (\S\ref{sec:method:sites}) at each of $\mathit{op}$'s
 $W(\mathit{op})$ sites.
 \end{claim}
+
+We refer to this pattern throughout the rest of the paper as the LGT
+effect: the frame-preservation obligation's \emph{existence} is gated
+by the locking protocol's structure, not a continuously-varying cost
+of the interface change itself.
 
 Claim~\ref{claim:threshold} is not a numeric-fit conjecture; it is a
 direct reading of the code quoted in \S\ref{sec:method:repair} and
@@ -1366,7 +1371,7 @@ $W(\mathit{op})$.
 \node[lbl, below=0.15cm of struct, align=center] {obligation: $W(\mathit{op})$ new sites\\(Table~\ref{tab:variants-sites})};
 \draw[-{Stealth}, thick, dashed] (deg) -- node[above, font=\scriptsize] {$\mathit{guard\_level} \to \mathtt{NR\_LEVELS}$ (runtime)} (struct);
 \end{tikzpicture}
-\caption{The threshold effect (Claim~\ref{claim:threshold}): whether the
+\caption{The LGT effect (Claim~\ref{claim:threshold}): whether the
 ancestor range is degenerate is a binary property of the locking
 protocol, not a continuously-varying quantity we measured a gradient
 over. Our six variants instantiate exactly the two sides of this
@@ -1843,13 +1848,13 @@ verify with the identical toolchain --- let us answer it with the same
 precision Verus itself demands of the proofs we ablated around.
 
 The answer is not ``the transactional interface has a fixed proof
-cost.'' It is a threshold effect: the cost exists, and is substantial
+cost.'' It is the LGT effect: the cost exists, and is substantial
 (9~sites, $\sim$150 lines, \S\ref{sec:eval:gap4}), precisely when the
 underlying locking protocol requires reasoning about an ancestor range
 that can genuinely vary at runtime, and it vanishes --- not shrinks,
 \emph{vanishes}, to the same obligation count, \S\ref{sec:eval:gap4}'s
 $142$ vs.\ $142$ --- when that range is degenerate. The same
-threshold reappears, independently derived and independently repaired,
+LGT effect reappears, independently derived and independently repaired,
 in an entirely separate concurrency protocol (\S\ref{sec:eval:rcu}),
 which is the strongest evidence we can offer within one artifact that
 we identified a property of \emph{tree-traversal-based fine-grained
@@ -2119,24 +2124,20 @@ also records a finer distinction not stated elsewhere in the paper:
 \corten{nontxn}'s \vfn{query\_locked} reaches a clean 0-error result,
 while neither \corten{coarse-nontxn}'s nor \corten{rcu-nontxn}'s does
 (all three of each variant's wrapper functions hit at least one of the
-two residual issues). \emph{Post-submission reproduction note:} both
-the proof-cost reproduction path
-(\vfn{scripts/verify\_all\_variants.sh}) and the runtime-benchmark
-path (\vfn{scripts/run\_benchmarks.sh}) have since been independently
-confirmed to reproduce end-to-end. The proof-cost path reproduces exit
-code 0 and all six variants' exact obligation/error counts as reported
-above. The runtime-benchmark path initially encountered an
-intermittent kernel-image build failure, root-caused to a
-registry-mirror-shadowing conflict for
-\vfn{osdk-frame-allocator}/\vfn{osdk-heap-allocator}/\vfn{ostd}
-(full diagnosis in \vfn{docs/environment-setup-and-findings.md}, issue
-4) rather than the originally-suspected \vfn{cargo-osdk}
-build-provenance issue; a permanent fix (patching these three crates
-to their local workspace paths) is now applied automatically by
-\vfn{scripts/run\_benchmarks.sh}, after which all three benchmark
-programs reproduced overhead ratios consistent with
-\vfn{benchmarks/raw\_data\_*.csv} within the paper's documented
-run-to-run noise band. This artifact does not include a build of an
+two residual issues). \emph{Post-submission reproduction note:} the
+proof-cost reproduction path (\vfn{scripts/verify\_all\_variants.sh})
+has since been independently confirmed to reproduce end-to-end (exit
+code 0, all six variants' exact obligation/error counts as reported
+above); the runtime-benchmark kernel-image build path
+(\vfn{scripts/run\_benchmarks.sh}) has, in a separate reproduction
+attempt, encountered a recurrence of the \vfn{cargo-osdk}
+manifest-generation issue (\S\ref{sec:eval:threats}) that did not
+respond to the remedy originally recorded for it; this is documented
+in \vfn{docs/environment-setup-and-findings.md} as a currently
+unresolved, environment-sensitive build issue affecting only the
+runtime-benchmark reproduction path, not the paper's proof-cost claims
+or the original runtime measurements themselves
+(\vfn{benchmarks/raw\_data\_*.csv}). This artifact does not include a build of an
 external, independently maintained Verus artifact instantiating both
 sides of the interface-atomicity axis, since --- per
 \S\ref{sec:eval:threats} --- we did not find one; a reviewer wishing to
